@@ -1,3 +1,5 @@
+import random
+import asyncio
 from typing import Optional, Union, List
 import os
 
@@ -60,9 +62,26 @@ def make_echo_response(prompts):
     return mock_base
 
 
+SIMULATED_LATENCY_RANGE = os.getenv("SIMULATED_LATENCY_MS", "100,200")
+SIMULATED_LATENCY = tuple(map(int, SIMULATED_LATENCY_RANGE.split(',')))
+
+
+async def simulate_latency():
+    """
+    Simulate network latency within a specified range in milliseconds.
+    """
+    if SIMULATED_LATENCY and len(SIMULATED_LATENCY) == 2:
+        latency_ms = random.randint(*SIMULATED_LATENCY)
+        await asyncio.sleep(latency_ms / 1000.0)  # Converting milliseconds to seconds for asyncio.sleep
+
+
 @app.post("/v1/completions")
-def handle_request(completion_request: CompletionRequest):
+async def handle_request(completion_request: CompletionRequest):  # Note use of `async` here
     print("Processing request.")
+
+    # Simulate network latency
+    await simulate_latency()
+
     if RESPONSE_MODE == "fixed":
         print("Returning fixed response")
         return MOCK_RESPONSE
