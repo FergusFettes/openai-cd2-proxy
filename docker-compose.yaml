@@ -5,19 +5,21 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    command: uvicorn mock_openai_server:app --reload --host 0.0.0.0
+    command: uvicorn mock_openai_server:app --reload
     environment:
       - RESPONSE_MODE=echo
+    network_mode: host
 
   flask:
     build:
       context: .
       dockerfile: Dockerfile
-    command: flask --app main:app run --host=0.0.0.0
+    command: poetry run python main.py
     environment:
       - OCP_OPENAI_API_KEY=test_api_key
       - OCP_OPENAI_ORG=test
-      - OCP_OPENAI_API_BASE=http://mock:8000/v1
+      - OCP_OPENAI_API_BASE=http://localhost:8000/v1
+    network_mode: host
 
   tests:
     build:
@@ -28,7 +30,8 @@ services:
       - flask
       - mock
     environment:
-      - FASTAPI_BASE_URL=http://mock:8000/v1/completions
-      - FLASK_BASE_URL=http://flask:5000/v1/completions
+      - FASTAPI_BASE_URL=http://localhost:8000/v1/completions
+      - FLASK_BASE_URL=http://localhost:5000/v1/completions
     profiles:
       - test
+    network_mode: host
