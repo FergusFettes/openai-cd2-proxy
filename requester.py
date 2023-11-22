@@ -1,20 +1,30 @@
+import uuid
+import json
+import os
+import csv
 import time
 import asyncio
 import aiohttp
 import random
 
+messages = [uuid.uuid4().hex for _ in range(100)]
+
 # Configuration parameters
 ENDPOINT_URL = "http://localhost:5000/v1/completions"  # Replace with your actual endpoint
-REQUEST_INTERVAL_SEC = 5
+REQUEST_INTERVAL_SEC = 3
 TEST_API_KEY_PREFIX = "test_api_key_"  # Prefix for the API keys
 IDENTITY_COUNT = 30
-REQUEST_PAYLOAD = {
-    "prompt": "Hello World",
-    "max_tokens": 60
-}
 
 # Shutdown event signal
 shutdown_event = asyncio.Event()
+
+LOG_FILE = "api_benchmark_log.csv"
+
+
+def log_to_csv(timestamp, identity, duration, status_code):
+    with open(LOG_FILE, mode='a', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerow([timestamp, identity, duration, status_code])
 
 
 async def make_request(identity, session):
@@ -23,21 +33,31 @@ async def make_request(identity, session):
         "Authorization": f"Bearer {TEST_API_KEY_PREFIX}{identity}"
     }
     try:
-        print(f"Identity {identity} attempting request")
         start_time = time.time()  # Start timing here
+        REQUEST_PAYLOAD = {"prompt": random.choice(messages)}
         async with session.post(ENDPOINT_URL, json=REQUEST_PAYLOAD, headers=headers) as response:
             duration = time.time() - start_time  # Calculate the duration
             if response.status == 200:
                 result = await response.json()
-                print(f"{duration:.2f}s - Identity {identity} received valid response: {result}")
+                if result["choices"][0]["text"] != REQUEST_PAYLOAD["prompt"]:
+                    print(f"Identity {identity} received invalid response: {result}")
+                    response.status = 500
+                else:
+                    print(f"{duration:.2f}s - Identity {identity} received valid response: {result}")
             else:
                 print(f"{duration:.2f}s - Identity {identity} received error response: {response.status}")
+            timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+            log_to_csv(timestamp, identity, duration, response.status)
     except aiohttp.ClientError as e:
         duration = time.time() - start_time  # Calculate the duration, even on error
         print(f"{duration:.2f}s - Request failed for identity {identity}: {e}")
+        timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+        log_to_csv(timestamp, identity, duration, response.status)
 
 
 async def identity_worker(identity):
+    await asyncio.sleep(random.randint(REQUEST_INTERVAL_SEC - 2, REQUEST_INTERVAL_SEC + 2))
+    print(f"Identity {identity} has been started up.")
     async with aiohttp.ClientSession() as session:
         while not shutdown_event.is_set():
             await make_request(identity, session)
@@ -57,7 +77,30 @@ async def main():
             task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
 
+
+def initialize_data_file():
+    """
+    For every identity, add {"name": f"test_{identity}", "api_key": f"test_api_key_{identity}"}
+    to the data.json file
+    """
+    data = {"api_keys": [], "usage": []}
+    for identity in range(IDENTITY_COUNT):
+        data["api_keys"].append({"name": f"test_{identity}", "api_key": f"test_api_key_{identity}"})
+    with open("data.json", "w") as f:
+        json.dump(data, f)
+
+
 if __name__ == "__main__":
+    # Initialize CSV file with headers
+    if not os.path.exists(LOG_FILE):
+        with open(LOG_FILE, mode='w', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerow(["Timestamp", "Identity", "Duration", "StatusCode"])
+
+    # Initialize data.json file
+    if not os.path.exists("data.json"):
+        initialize_data_file()
+
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
