@@ -34,39 +34,55 @@ def load_data():
 load_data()
 
 
+def validate_api_key(api_key_full):
+    if not api_key_full.startswith("Bearer "):
+        return False, "Invalid API key"
+    api_key = api_key_full[7:]
+    load_data()
+    matching_keys = [key for key in data["api_keys"] if key["api_key"] == api_key]
+    if not matching_keys:
+        return False, "Invalid API key"
+    return True, matching_keys[0]
+
+
+def record_usage(key_info):
+    with open("data.json", "w") as f:
+        data["usage"].append({"name": key_info["name"], "time": time.time()})
+        json.dump(data, f)
+
+
+def package_response(event, key, params):
+    event.wait()
+    with lock:
+        for value in pending_requests[key]["values"]:
+            if value["prompt"] == params["prompt"]:
+                return jsonify(value["response"])
+    return jsonify({"error": "Unable to process request"}), 500
+
+
 @app.route("/v1/completions", methods=["POST"])
 def handle_request():
     params = request.get_json()
 
-    load_data()
-    api_key_full = request.headers.get("Authorization")
-    if api_key_full.startswith("Bearer "):
-        api_key = api_key_full[7:]
-    else:
-        return jsonify({"error": "Invalid API key"}), 401
-
     if "prompt" not in params:
         return jsonify({"error": "prompt is required"}), 400
 
-    matching_keys = [key for key in data["api_keys"] if key["api_key"] == api_key]
-    if len(matching_keys) == 0:
-        return jsonify({"error": "Invalid API key"}), 401
-    data["usage"].append({"name": matching_keys[0]["name"], "time": time.time()})
+    api_key_full = request.headers.get("Authorization")
+    valid, result = validate_api_key(api_key_full)
+    if not valid:
+        return jsonify({"error": result}), 401
+    key_info = result
 
-    with open("data.json", "w") as f:
-        json.dump(data, f)
-
+    record_usage(key_info)
     params["model"] = "code-davinci-002"
 
-    prompt = params["prompt"]
     shared_params = {k: v for k, v in params.items() if k != "prompt"}
 
     event = Event()
-
     sha256 = hashlib.sha256()
     sha256.update(json.dumps(tuple(sorted(params.items()))).encode("utf-8"))
     key = sha256.digest()
-    value = {"prompt": prompt, "event": event}
+    value = {"prompt": params["prompt"], "event": event}
 
     with lock:
         if key not in pending_requests:
@@ -74,12 +90,7 @@ def handle_request():
         else:
             pending_requests[key]["values"].append(value)
 
-    event.wait()
-
-    with lock:
-        for value in pending_requests[key]["values"]:
-            if value["prompt"] == prompt:
-                return jsonify(value["response"])
+    return package_response(event, key, params)
 
 
 def handle_pending_requests():
