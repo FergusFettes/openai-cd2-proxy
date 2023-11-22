@@ -11,11 +11,11 @@ COPY pyproject.toml poetry.lock /app/
 RUN pip install --upgrade pip
 RUN pip install poetry
 RUN poetry config virtualenvs.create false
-RUN poetry install --no-dev
+RUN poetry install
 
 # Copy the rest of the application code into the container
-kCOPY . /app
+COPY . /app
 
-# Expose ports (replace with the port your apps are running on)
-EXPOSE 8000
-EXPOSE 5000
+# # Expose ports (replace with the port your apps are running on)
+# EXPOSE 8000
+# EXPOSE 5000

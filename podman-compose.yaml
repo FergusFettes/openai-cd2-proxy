@@ -21,12 +21,16 @@ services:
     environment:
       - FLASK_APP=main:app
       - FLASK_ENV=development
-      - OCP_OPENAI_API_KEY=your_openai_api_key_here
-      - OCP_OPENAI_ORG=your_openai_org_here
-      - OCP_OPENAI_API_BASE=your_openai_api_base_here
+      - OCP_OPENAI_API_KEY=test_api_key
+      - OCP_OPENAI_ORG=test
+      - OCP_OPENAI_API_BASE=http://localhost:8000/v1
 
   test:
     build:
       context: .
       dockerfile: Containerfile
     command: /bin/sleep infinity  # Keeps the container running so we can exec into it to run tests
+
+networks:
+  default:
+    driver: bridge

@@ -1,9 +1,10 @@
+import os
 import pytest
 import requests
 
 # Define the base URL for the mock servers
-FASTAPI_BASE_URL = "http://localhost:8000/v1/completions"
-FLASK_BASE_URL = "http://localhost:5000/v1/completions"
+FASTAPI_BASE_URL = os.getenv("FASTAPI_BASE_URL", "http://localhost:8000/v1/completions")
+FLASK_BASE_URL = os.getenv("FLASK_BASE_URL", "http://localhost:5000/v1/completions")
 
 
 @pytest.mark.parametrize("base_url", [FASTAPI_BASE_URL, FLASK_BASE_URL])

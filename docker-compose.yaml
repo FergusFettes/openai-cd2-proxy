@@ -1,0 +1,34 @@
+version: '3'
+
+services:
+  mock:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: uvicorn mock_openai_server:app --reload --host 0.0.0.0
+    environment:
+      - RESPONSE_MODE=echo
+
+  flask:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: flask --app main:app run --host=0.0.0.0
+    environment:
+      - OCP_OPENAI_API_KEY=test_api_key
+      - OCP_OPENAI_ORG=test
+      - OCP_OPENAI_API_BASE=http://mock:8000/v1
+
+  tests:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: /bin/sh -c "poetry run pytest -x && exit 0 || exit 1"
+    depends_on:
+      - flask
+      - mock
+    environment:
+      - FASTAPI_BASE_URL=http://mock:8000/v1/completions
+      - FLASK_BASE_URL=http://flask:5000/v1/completions
+    profiles:
+      - test
