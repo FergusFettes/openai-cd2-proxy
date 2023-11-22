@@ -129,43 +129,44 @@ def handle_pending_requests():
             del pending_requests[key_to_delete]
 
 
-try:
-    if __name__ == "__main__":
-        if len(argv) > 1 and argv[1] == "add-key":
-            if len(argv) != 3:
-                print("Usage: main.py add-key [name]")
-                exit(1)
+import typer
 
-            name = argv[2]
-            api_key = str(uuid4())
+cli = typer.Typer()
 
-            data["api_keys"].append({"name": name, "api_key": api_key})
-            print(f"Added key {api_key} for {name}")
-        elif len(argv) > 1 and argv[1] == "delete-key":
-            if len(argv) != 3:
-                print("Usage: main.py delete-key [name]")
-                exit(1)
 
-            name = argv[2]
-
-            data["api_keys"] = [key for key in data["api_keys"] if key["name"] != name]
-            print(f"Deleted key for {name}")
-        elif len(argv) > 1 and argv[1] == "list-keys":
-            if len(argv) != 2:
-                print("Usage: main.py list-keys")
-                exit(1)
-
-            for key in data["api_keys"]:
-                print(f"{key['name']}: {key['api_key']}")
-        elif len(argv) > 1:
-            print("Usage: main.py [add-key|delete-key|list-keys]")
-            exit(1)
-        else:
-            Thread(target=handle_pending_requests, daemon=True).start()
-            app.run()
-
-    else:
-        Thread(target=handle_pending_requests, daemon=True).start()
-finally:
+def save_data():
     with open("data.json", "w") as f:
         json.dump(data, f)
+
+
+@cli.command("add-key")
+def add_key(name: str):
+    api_key = str(uuid4())
+    data["api_keys"].append({"name": name, "api_key": api_key})
+    save_data()
+    typer.echo(f"Added key {api_key} for {name}")
+
+
+@cli.command("delete-key")
+def delete_key(name: str):
+    data["api_keys"] = [key for key in data["api_keys"] if key["name"] != name]
+    save_data()
+    typer.echo(f"Deleted key for {name}")
+
+
+@cli.command("list-keys")
+def list_keys():
+    for key in data["api_keys"]:
+        typer.echo(f"{key['name']}: {key['api_key']}")
+
+
+def run_server():
+    Thread(target=handle_pending_requests, daemon=True).start()
+    app.run()
+
+
+if __name__ == "__main__":
+    if len(argv) == 1:
+        run_server()
+    else:
+        cli()
