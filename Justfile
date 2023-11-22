@@ -22,3 +22,6 @@ test_many:
 
 pytest:
   poetry run pytest
+
+start:
+  poetry run podman-compose -f podman-compose.yaml up --build

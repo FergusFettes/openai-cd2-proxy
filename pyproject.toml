@@ -16,6 +16,9 @@ flask-cors = "^3.0.10"
 fastapi = "^0.104.1"
 uvicorn = "^0.24.0.post1"
 
+[tool.poetry.group.dev.dependencies]
+podman-compose = "^1.0.6"
+
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"

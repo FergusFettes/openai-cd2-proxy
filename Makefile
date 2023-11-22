@@ -1,3 +1,3 @@
 all:
-	-snap install just
-	-sudo snap install just
+	snap install just
+	apt install podman
