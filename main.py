@@ -10,7 +10,6 @@ app = Flask(__name__)
 request_handler = RequestHandler()
 CORS(app)
 
-pending_requests = {}
 lock = Lock()
 
 
@@ -28,11 +27,8 @@ def handle_request():
     key_info = result
     request_handler.record_usage(key_info)
 
-    print(f"Before {request_handler.pending_requests}")
-    event, key = request_handler.add_request(params)
-    print(f"During {request_handler.pending_requests}")
-    response, status_code = request_handler.package_response(event, key, params)
-    print(f"After {request_handler.pending_requests}")
+    event, value = request_handler.add_request(params)
+    response, status_code = request_handler.package_response(event, value)
     return jsonify(response), status_code
 
 

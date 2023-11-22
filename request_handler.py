@@ -1,9 +1,9 @@
 from os import getenv
-import hashlib
 import json
 import time
 from threading import Event, Lock, Thread
 import openai
+import queue
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -18,7 +18,7 @@ class RequestHandler:
         self.lock = Lock()
         self.data_path = data_path
         self.model = model
-        self.pending_requests = {}
+        self.requests_queue = queue.Queue()
         self.load_data()
 
     def load_data(self):
@@ -51,30 +51,17 @@ class RequestHandler:
         shared_params["model"] = self.model
 
         event = Event()
-        sha256 = hashlib.sha256()
-        sha256.update(json.dumps(tuple(sorted(params.items()))).encode("utf-8"))
-        key = sha256.digest()
-        value = {"prompt": params["prompt"], "event": event}
+        value = {"prompt": params["prompt"], "event": event, "response": None}
 
-        with self.lock:
-            if key not in self.pending_requests:
-                self.pending_requests[key] = {
-                    "shared_params": shared_params,
-                    "values": [value]
-                }
-            else:
-                self.pending_requests[key]["values"].append(value)
+        self.requests_queue.put((shared_params, value))
 
-        return event, key
+        return event, value
 
-    def package_response(self, event, key, params):
+    def package_response(self, event, value):
+        # Wait for the event to be set by the request processing thread.
         event.wait()
-        with self.lock:
-            print(f"In package_response {self.pending_requests}")
-            for value in self.pending_requests[key]["values"]:
-                if value["prompt"] == params["prompt"]:
-                    return value["response"], 200
-        return {"error": "Unable to process request"}, 500
+        # Once the event is set, the response is ready in the value object.
+        return value["response"], 200
 
     def request_openai_api(self, shared_params, prompts):
         return openai.Completion.create(
@@ -96,20 +83,15 @@ class RequestHandler:
 
     def _process_requests(self):
         while True:
-            with self.lock:
-                keys_to_delete = []
-                print(f"In _process_requests {self.pending_requests}")
-                for key, details in self.pending_requests.items():
-                    shared_params = details["shared_params"]
-                    values = details["values"]
-                    self.process_request_batch(key, shared_params, values)
-                    keys_to_delete.append(key)
+            shared_params, value = self.requests_queue.get()
+            prompt = value["prompt"]
+            response = self.request_openai_api(shared_params, prompt)
 
-            time.sleep(3)
+            # Now we directly save the response into the value object
+            value["response"] = response
+            value["event"].set()  # Signal that the response is ready
 
-            with self.lock:
-                for key in keys_to_delete:
-                    del self.pending_requests[key]
+            self.requests_queue.task_done()
 
     def run(self):
         request_thread = Thread(target=self._process_requests, daemon=True)
