@@ -1,3 +1,4 @@
+import os
 import json
 import time
 import subprocess
@@ -77,8 +78,7 @@ def test_server():
     server.terminate()
     server.wait()
 
-    # Optionally remove or archive the modified data.json file
-    # os.remove(test_server_data_file)  # Uncomment if you want to delete the file after tests.
+    os.remove(test_server_data_file)
 
 
 def test_end_to_end_valid_request(client, test_server):
