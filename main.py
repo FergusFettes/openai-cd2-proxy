@@ -16,6 +16,7 @@ app = Flask(__name__)
 CORS(app)
 openai.api_key = getenv("OCP_OPENAI_API_KEY")
 openai.organization = getenv("OCP_OPENAI_ORG")
+openai.api_base = getenv("OCP_OPENAI_API_BASE")
 
 pending_requests = {}
 lock = Lock()
