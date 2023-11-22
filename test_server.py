@@ -62,7 +62,9 @@ def test_server():
     # Define the content for your test server's data.json file
     server_data = {
         "api_keys": [
-            {"name": "test_0", "api_key": "test_api_key_0"}
+            {"name": "test_0", "api_key": "test_api_key_0"},
+            {"name": "test_1", "api_key": "test_api_key_1"},
+            {"name": "test_2", "api_key": "test_api_key_2"},
         ],
         "usage": []
     }
@@ -94,3 +96,30 @@ def test_end_to_end_valid_request(client, test_server):
     assert response.status_code == 200
     # The exact assertion here depends on how the test server is echoing back the request
     assert response.json['choices'][0]['text'] == "test prompt"
+
+
+def test_multiple_users_different_api_keys(client, test_server):
+    """Test that multiple users with different API keys get appropriate responses."""
+
+    user_responses = []  # Collect responses for verification
+
+    for i in range(3):  # We added three API keys in the test_server fixture
+        api_key = f'test_api_key_{i}'
+        user_prompt = f'prompt for user {i}'
+
+        response = client.post(
+            '/v1/completions',
+            json={"prompt": user_prompt},
+            headers={"Authorization": f"Bearer {api_key}"}
+        )
+
+        user_responses.append({
+            "status_code": response.status_code,
+            "api_key": api_key,
+            "response_text": response.json['choices'][0]['text']
+        })
+
+    # Assert that each user received a 200 status code and the correct response
+    for user_response in user_responses:
+        assert user_response['status_code'] == 200
+        assert user_response['response_text'] == f"prompt for user {user_responses.index(user_response)}"
