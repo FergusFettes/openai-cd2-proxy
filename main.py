@@ -112,7 +112,7 @@ def handle_pending_requests():
 
             key_to_delete = key
 
-        time.sleep(3)
+        time.sleep(2)
 
         with lock:
             del pending_requests[key_to_delete]

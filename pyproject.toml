@@ -18,6 +18,8 @@ uvicorn = "^0.24.0.post1"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.4.3"
+ipdb = "^0.13.13"
+pytest-asyncio = "^0.21.1"
 
 [build-system]
 requires = ["poetry-core"]
