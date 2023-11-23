@@ -50,12 +50,19 @@ class RequestHandler:
         shared_params = {k: v for k, v in params.items() if k != "prompt"}
         shared_params["model"] = self.model
 
+        batch_id = self._generate_batch_id(shared_params)
+
         event = Event()
         value = {"prompt": params["prompt"], "event": event, "response": None}
 
-        self.requests_queue.put((shared_params, value))
+        self.requests_queue.put((batch_id, shared_params, value))
 
         return event, value
+
+    def _generate_batch_id(self, shared_params):
+        # This can be any function that uniquely identifies a set of parameters.
+        # For simplicity, we're using the JSON representation of the sorted items of the dictionary.
+        return json.dumps(tuple(sorted(shared_params.items())), sort_keys=True)
 
     def package_response(self, event, value):
         # Wait for the event to be set by the request processing thread.
@@ -69,8 +76,8 @@ class RequestHandler:
             **shared_params
         )
 
-    def process_request_batch(self, key, shared_params, values):
-        prompts = [value["prompt"] for value in values]
+    def process_request_batch(self, batch_id, shared_params, prompts, values):
+        # Request OpenAI API for the batch
         response = self.request_openai_api(shared_params, prompts)
 
         n = shared_params.get("n", 1)
@@ -83,15 +90,32 @@ class RequestHandler:
 
     def _process_requests(self):
         while True:
-            shared_params, value = self.requests_queue.get()
-            prompt = value["prompt"]
-            response = self.request_openai_api(shared_params, prompt)
+            # Initialize a dictionary to batch requests with the same parameters
+            batched_requests = {}
+            while not self.requests_queue.empty():
+                # While there are items in the queue, aggregate them by batch_id
+                batch_id, shared_params, value = self.requests_queue.get_nowait()
+                if batch_id not in batched_requests:
+                    batched_requests[batch_id] = {
+                        "shared_params": shared_params,
+                        "prompts": [],
+                        "values": []
+                    }
+                batched_requests[batch_id]["prompts"].append(value["prompt"])
+                batched_requests[batch_id]["values"].append(value)
+                self.requests_queue.task_done()
 
-            # Now we directly save the response into the value object
-            value["response"] = response
-            value["event"].set()  # Signal that the response is ready
+            # Now process each batch of requests
+            for batch_id, batch_data in batched_requests.items():
+                self.process_request_batch(
+                    batch_id,
+                    batch_data["shared_params"],
+                    batch_data["prompts"],
+                    batch_data["values"]
+                )
 
-            self.requests_queue.task_done()
+            # Here you could insert a delay before processing the next set of batches
+            time.sleep(3)  # Adjust the sleep time as needed
 
     def run(self):
         request_thread = Thread(target=self._process_requests, daemon=True)
