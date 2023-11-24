@@ -1,10 +1,10 @@
 from os import getenv
 import json
-import time
-from threading import Event, Thread
-import queue
+import asyncio
+from asyncio import Queue, Event
+from typing import Any, Dict
 
-from openai import OpenAI
+from openai import AsyncClient
 
 from openai_proxy.utils import logger
 
@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
-client = OpenAI(
+client = AsyncClient(
     api_key=getenv("OCP_OPENAI_API_KEY"),
     organization=getenv("OCP_OPENAI_ORG"),
     base_url=getenv("OCP_OPENAI_API_BASE")
@@ -20,19 +20,18 @@ client = OpenAI(
 
 
 class RequestHandler:
-    # Wait for 3 seconds so there are no more than 20 requests per minute
-    SERVER_WAIT_TIME = 3
+    SERVER_WAIT_TIME = 3  # Wait for 3 seconds to manage request frequency
 
     def __init__(self, data_path="data.json", model="code-davinci-002"):
         self.data_path = data_path
         self.model = model
-        self.requests_queue = queue.Queue()
+        self.requests_queue = Queue()
 
-        # Check if 'localhost' in the API base URL, if so set the wait time to 0
-        if "localhost" in str(client.base_url):
-            self.SERVER_WAIT_TIME = 0
+        # # Check if 'localhost' in the API base URL, if so set the wait time to 0
+        # if "localhost" in str(client.base_url):
+        #     self.SERVER_WAIT_TIME = 0
 
-    def add_request(self, params):
+    async def add_request(self, params: Dict[str, Any]) -> Any:
         shared_params = {k: v for k, v in params.items() if k != "prompt" and v is not None}
         shared_params["model"] = self.model
 
@@ -41,32 +40,27 @@ class RequestHandler:
         event = Event()
         value = {"prompt": params["prompt"], "event": event, "response": None}
 
-        self.requests_queue.put((batch_id, shared_params, value))
+        await self.requests_queue.put((batch_id, shared_params, value))
         logger.debug(f"{self.requests_queue.qsize()} requests in queue")
 
         return event, value
 
-    def _generate_batch_id(self, shared_params):
-        # This can be any function that uniquely identifies a set of parameters.
-        # For simplicity, we're using the JSON representation of the sorted items of the dictionary.
+    def _generate_batch_id(self, shared_params: Dict[str, Any]) -> str:
         return json.dumps(tuple(sorted(shared_params.items())), sort_keys=True)
 
-    def package_response(self, event, value):
-        # Wait for the event to be set by the request processing thread.
-        event.wait()
-        # Once the event is set, the response is ready in the value object.
+    async def package_response(self, event: Event, value: Any) -> Any:
+        await event.wait()
         return value["response"], 200
 
-    def request_openai_api(self, shared_params, prompts):
-        return client.completions.create(
+    async def request_openai_api(self, shared_params: Dict[str, Any], prompts: Any) -> Any:
+        return await client.completions.create(
             prompt=prompts,
             **shared_params
         )
 
-    def process_request_batch(self, batch_id, shared_params, prompts, values):
-        # Request OpenAI API for the batch
+    async def process_request_batch(self, batch_id: str, shared_params: Dict[str, Any], prompts: Any, values: Any):
         logger.debug(f"Requesting OpenAI API with batch of size {len(prompts)}")
-        response = self.request_openai_api(shared_params, prompts)
+        response = await self.request_openai_api(shared_params, prompts)
 
         n = shared_params.get("n", 1)
         choices = response.choices
@@ -76,47 +70,43 @@ class RequestHandler:
             value["response"] = {"choices": group}
             value["event"].set()
 
-    def _process_requests(self):
-        while True:
-            time.sleep(0.1)
-            # Initialize a dictionary to batch requests with the same parameters
-            batched_requests = {}
-            while not self.requests_queue.empty():
-                # While there are items in the queue, aggregate them by batch_id
-                batch_id, shared_params, value = self.requests_queue.get_nowait()
-                if batch_id not in batched_requests:
-                    batched_requests[batch_id] = {
+    async def process_requests_periodically(self):
+        try:
+            while True:
+                # The coroutine will pause here until an item is available.
+                batch_id, shared_params, value = await self.requests_queue.get()
+                batched_requests = {
+                    batch_id: {
                         "shared_params": shared_params,
-                        "prompts": [],
-                        "values": []
+                        "prompts": [value["prompt"]],
+                        "values": [value]
                     }
-                batched_requests[batch_id]["prompts"].append(value["prompt"])
-                batched_requests[batch_id]["values"].append(value)
-                self.requests_queue.task_done()
+                }
 
-            # Now process each batch of requests
-            for batch_id, batch_data in batched_requests.items():
-                self.process_request_batch(
-                    batch_id,
-                    batch_data["shared_params"],
-                    batch_data["prompts"],
-                    batch_data["values"]
-                )
+                while not self.requests_queue.empty():
+                    batch_id, shared_params, value = await self.requests_queue.get()
+                    if batch_id in batched_requests:
+                        batched_requests[batch_id]["prompts"].append(value["prompt"])
+                        batched_requests[batch_id]["values"].append(value)
+                    else:
+                        batched_requests[batch_id] = {
+                            "shared_params": shared_params,
+                            "prompts": [value["prompt"]],
+                            "values": [value]
+                        }
+                    self.requests_queue.task_done()
 
-            time.sleep(self.SERVER_WAIT_TIME)
+                # Process each batch
+                for batch_id, batch_data in batched_requests.items():
+                    await self.process_request_batch(
+                        batch_id,
+                        batch_data["shared_params"],
+                        batch_data["prompts"],
+                        batch_data["values"]
+                    )
 
-    def run(self):
-        logger.debug("Starting request processing thread")
-        self.request_thread = Thread(target=self._process_requests, daemon=True)
-        self.request_thread.start()
-        logger.debug("Request processing thread started")
+                # Delay before the next iteration of the loop.
+                await asyncio.sleep(self.SERVER_WAIT_TIME)
 
-    def stop(self):
-        logger.debug("Stopping request processing thread")
-        # Clear the queue
-        while not self.requests_queue.empty():
-            self.requests_queue.get_nowait()
-            self.requests_queue.task_done()
-        self.request_thread.join()
-        logger.debug("Request processing thread stopped")
-
+        except asyncio.CancelledError:
+            logger.debug("Request processing has been cancelled")

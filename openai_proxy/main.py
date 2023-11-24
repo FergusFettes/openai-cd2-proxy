@@ -1,3 +1,4 @@
+import asyncio
 from typing import Optional, Union, List
 import time
 from sys import argv
@@ -14,16 +15,16 @@ app = FastAPI()
 request_handler = RequestHandler()
 
 
+@app.on_event("startup")
 async def startup():
     await init_db()
+    request_handler.process_task = asyncio.create_task(request_handler.process_requests_periodically())
 
 
+@app.on_event("shutdown")
 async def shutdown():
-    request_handler.stop()
-
-
-app.add_event_handler("startup", startup)
-app.add_event_handler("shutdown", shutdown)
+    request_handler.process_task.cancel()
+    await request_handler.process_task
 
 
 class CompletionRequest(BaseModel):
@@ -48,15 +49,14 @@ async def handle_request(completion_request: CompletionRequest, authorization: s
     await Usage.create(name=key_info.name, time=time.time())
 
     logger.debug(f"Adding request: {completion_request.prompt}")
-    event, value = request_handler.add_request(completion_request.dict())
-    response, status_code = request_handler.package_response(event, value)
+    event, value = await request_handler.add_request(completion_request.dict())
+    response, status_code = await request_handler.package_response(event, value)
     logger.debug(f"Response: {response}")
     return response
 
 
 if __name__ == "__main__":
     if len(argv) == 1:
-        request_handler.run()
         import uvicorn
         uvicorn.run(app, port=5000)
     else:
