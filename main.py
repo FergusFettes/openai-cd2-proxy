@@ -5,6 +5,7 @@ from threading import Lock
 from uuid import uuid4
 
 from request_handler import RequestHandler
+from models import Usage
 
 app = Flask(__name__)
 request_handler = RequestHandler()
@@ -40,24 +41,40 @@ cli = typer.Typer()
 @cli.command("add-key")
 def add_key(name: str):
     api_key = str(uuid4())
-    request_handler.data["api_keys"].append({"name": name, "api_key": api_key})
-    request_handler.save_data()
-    typer.echo(f"Added key {api_key} for {name}")
+    if not request_handler.add_api_key(name):
+        typer.echo(f"Key for {name} already exists")
+    else:
+        typer.echo(f"Added key for {name}: {api_key}")
+
+
+@cli.command("update-key")
+def update_key(name: str):
+    api_key = str(uuid4())
+    if not request_handler.update_api_key(name):
+        typer.echo(f"Key for {name} does not exist")
+    else:
+        typer.echo(f"Updated key for {name}: {api_key}")
 
 
 @cli.command("delete-key")
 def delete_key(name: str):
-    request_handler.data["api_keys"] = [
-        key for key in request_handler.data["api_keys"] if key["name"] != name
-    ]
-    request_handler.save_data()
-    typer.echo(f"Deleted key for {name}")
+    if not request_handler.delete_api_key(name):
+        typer.echo(f"Key for {name} does not exist")
+    else:
+        typer.echo(f"Deleted key for {name}")
 
 
 @cli.command("list-keys")
 def list_keys():
-    for key in request_handler.data["api_keys"]:
-        typer.echo(f"{key['name']}: {key['api_key']}")
+    for key in request_handler.list_api_keys():
+        typer.echo(f"{key.name}: {key.api_key}")
+
+
+@cli.command("usage")
+def usage():
+    typer.echo("Usage:")
+    for usage in Usage.select():
+        typer.echo(f"{usage.name}: {usage.time}")
 
 
 def run_server():

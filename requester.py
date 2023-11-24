@@ -1,11 +1,12 @@
 import uuid
-import json
 import os
 import csv
 import time
 import asyncio
 import aiohttp
 import random
+
+from models import APIKey, db
 
 messages = [uuid.uuid4().hex for _ in range(100)]
 
@@ -78,16 +79,13 @@ async def main():
         await asyncio.gather(*tasks, return_exceptions=True)
 
 
-def initialize_data_file():
-    """
-    For every identity, add {"name": f"test_{identity}", "api_key": f"test_api_key_{identity}"}
-    to the data.json file
-    """
-    data = {"api_keys": [], "usage": []}
+def initialize_api_keys():
     for identity in range(IDENTITY_COUNT):
-        data["api_keys"].append({"name": f"test_{identity}", "api_key": f"test_api_key_{identity}"})
-    with open("data.json", "w") as f:
-        json.dump(data, f)
+        name = f"test_{identity}"
+        api_key = f"{TEST_API_KEY_PREFIX}{identity}"
+        APIKey.get_or_create(name=name, defaults={'api_key': api_key})
+        print(f"Created API key for identity {identity}")
+    db.commit()
 
 
 if __name__ == "__main__":
@@ -97,9 +95,7 @@ if __name__ == "__main__":
             writer = csv.writer(file)
             writer.writerow(["Timestamp", "Identity", "Duration", "StatusCode"])
 
-    # Initialize data.json file
-    if not os.path.exists("data.json"):
-        initialize_data_file()
+    initialize_api_keys()
 
     try:
         asyncio.run(main())
