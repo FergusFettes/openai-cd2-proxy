@@ -140,8 +140,7 @@ class RequestHandler:
                     batch_data["values"]
                 )
 
-            # Here you could insert a delay before processing the next set of batches
-            time.sleep(2)  # Adjust the sleep time as needed
+            time.sleep(2)
 
     def run(self):
         request_thread = Thread(target=self._process_requests, daemon=True)

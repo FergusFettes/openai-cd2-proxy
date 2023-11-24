@@ -1,7 +1,7 @@
 import json
 import uuid
-import os
-import csv
+# import os
+# import csv
 import time
 import asyncio
 import aiohttp
@@ -20,13 +20,13 @@ IDENTITY_COUNT = 30
 # Shutdown event signal
 shutdown_event = asyncio.Event()
 
-LOG_FILE = "api_benchmark_log.csv"
+# LOG_FILE = "api_benchmark_log.csv"
 
 
-def log_to_csv(timestamp, identity, duration, status_code):
-    with open(LOG_FILE, mode='a', newline='') as file:
-        writer = csv.writer(file)
-        writer.writerow([timestamp, identity, duration, status_code])
+# def log_to_csv(timestamp, identity, duration, status_code):
+#     with open(LOG_FILE, mode='a', newline='') as file:
+#         writer = csv.writer(file)
+#         writer.writerow([timestamp, identity, duration, status_code])
 
 
 async def make_request(identity, session):
@@ -50,13 +50,13 @@ async def make_request(identity, session):
                     print(f"{duration:.2f}s - Identity {identity} received valid response: {result}")
             else:
                 print(f"{duration:.2f}s - Identity {identity} received error response: {response.status}")
-            timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
-            log_to_csv(timestamp, identity, duration, response.status)
+            # timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+            # log_to_csv(timestamp, identity, duration, response.status)
     except aiohttp.ClientError as e:
         duration = time.time() - start_time  # Calculate the duration, even on error
         print(f"{duration:.2f}s - Request failed for identity {identity}: {e}")
-        timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
-        log_to_csv(timestamp, identity, duration, response.status)
+        # timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+        # log_to_csv(timestamp, identity, duration, response.status)
 
 
 async def identity_worker(identity):
@@ -93,10 +93,10 @@ def initialize_api_keys():
 
 if __name__ == "__main__":
     # Initialize CSV file with headers
-    if not os.path.exists(LOG_FILE):
-        with open(LOG_FILE, mode='w', newline='') as file:
-            writer = csv.writer(file)
-            writer.writerow(["Timestamp", "Identity", "Duration", "StatusCode"])
+    # if not os.path.exists(LOG_FILE):
+    #     with open(LOG_FILE, mode='w', newline='') as file:
+    #         writer = csv.writer(file)
+    #         writer.writerow(["Timestamp", "Identity", "Duration", "StatusCode"])
 
     initialize_api_keys()
 
