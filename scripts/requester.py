@@ -7,7 +7,7 @@ import asyncio
 import aiohttp
 import random
 
-from models import APIKey, db
+from openai_proxy.models import APIKey, db
 
 messages = [uuid.uuid4().hex for _ in range(100)]
 

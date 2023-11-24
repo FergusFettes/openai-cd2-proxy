@@ -1,12 +1,10 @@
-import uuid
 from os import getenv
 import json
 import time
-from threading import Event, Lock, Thread
+from threading import Event, Thread
 import openai
 import queue
 
-from openai_proxy.models import APIKey, Usage, db
 from openai_proxy.utils import logger
 
 from dotenv import load_dotenv
@@ -22,7 +20,6 @@ class RequestHandler:
     SERVER_WAIT_TIME = 3
 
     def __init__(self, data_path="data.json", model="code-davinci-002"):
-        self.lock = Lock()
         self.data_path = data_path
         self.model = model
         self.requests_queue = queue.Queue()
@@ -30,54 +27,6 @@ class RequestHandler:
         # Check if 'localhost' in the API base URL, if so set the wait time to 0
         if "localhost" in openai.api_base:
             self.SERVER_WAIT_TIME = 0
-
-    def delete_api_key(self, name):
-        try:
-            key = APIKey.get(APIKey.name == name)
-            key.delete_instance()
-            db.commit()
-            return True
-        except APIKey.DoesNotExist:
-            return False
-
-    def add_api_key(self, name, key):
-        try:
-            APIKey.create(name=name, api_key=key)
-            db.commit()
-            return True
-        except Exception:
-            return False
-
-    def update_api_key(self, name):
-        try:
-            key = APIKey.get(APIKey.name == name)
-            key.api_key = str(uuid.uuid4())
-            key.save()
-            db.commit()
-            return True
-        except APIKey.DoesNotExist:
-            return False
-
-    def list_api_keys(self):
-        return APIKey.select()
-
-    def validate_api_key(self, api_key_full):
-        if not api_key_full.startswith("Bearer "):
-            return False, "Invalid API key"
-        api_key = api_key_full[7:]
-
-        try:
-            key_info = APIKey.get(APIKey.api_key == api_key)
-            return True, {
-                "name": key_info.name,
-                "api_key": key_info.api_key
-            }
-        except APIKey.DoesNotExist:
-            return False, "Invalid API key"
-
-    def record_usage(self, key_info):
-        Usage.create(name=key_info["name"], time=time.time())
-        db.commit()
 
     def add_request(self, params):
         shared_params = {k: v for k, v in params.items() if k != "prompt"}
@@ -125,7 +74,7 @@ class RequestHandler:
 
     def _process_requests(self):
         while True:
-            logger.debug(f"Processing requests queue of size {self.requests_queue.qsize()}")
+            time.sleep(0.1)
             # Initialize a dictionary to batch requests with the same parameters
             batched_requests = {}
             while not self.requests_queue.empty():

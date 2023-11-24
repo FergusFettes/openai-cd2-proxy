@@ -1,3 +1,5 @@
+import uuid
+import time
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 from sys import argv
@@ -5,7 +7,7 @@ from threading import Lock
 from uuid import uuid4
 
 from openai_proxy.request_handler import RequestHandler
-from openai_proxy.models import Usage
+from openai_proxy.models import Usage, APIKey, db
 from openai_proxy.utils import logger
 
 app = Flask(__name__)
@@ -23,12 +25,18 @@ def handle_request():
         return jsonify({"error": "prompt is required"}), 400
 
     api_key_full = request.headers.get("Authorization")
-    valid, result = request_handler.validate_api_key(api_key_full)
-    if not valid:
-        return jsonify({"error": result}), 401
 
-    key_info = result
-    request_handler.record_usage(key_info)
+    if not api_key_full.startswith("Bearer "):
+        return jsonify({"error": "Invalid API key"}), 401
+    api_key = api_key_full[7:]
+
+    try:
+        key_info = APIKey.filter(APIKey.api_key == api_key).first()
+    except APIKey.DoesNotExist:
+        return jsonify({"error": "Invalid API key"}), 401
+
+    Usage.create(name=key_info.name, time=time.time())
+    db.commit()
 
     logger.debug(f"Adding request: {params}")
     event, value = request_handler.add_request(params)
@@ -42,36 +50,44 @@ import typer
 cli = typer.Typer()
 
 
-# Optionally takes a string which is the key
 @cli.command("add-key")
 def add_key(name: str, key: str = None):
     api_key = key or str(uuid4())
-    if not request_handler.add_api_key(name, key):
-        typer.echo(f"Key for {name} already exists")
-    else:
+    try:
+        APIKey.create(name=name, api_key=api_key)
+        db.commit()
         typer.echo(f"Added key for {name}: {api_key}")
+    except Exception:
+        typer.echo(f"Key for {name} already exists")
 
 
 @cli.command("update-key")
 def update_key(name: str):
     api_key = str(uuid4())
-    if not request_handler.update_api_key(name):
-        typer.echo(f"Key for {name} does not exist")
-    else:
+    try:
+        key = APIKey.get(APIKey.name == name)
+        key.api_key = str(uuid.uuid4())
+        key.save()
+        db.commit()
         typer.echo(f"Updated key for {name}: {api_key}")
+    except APIKey.DoesNotExist:
+        typer.echo(f"Key for {name} does not exist")
 
 
 @cli.command("delete-key")
 def delete_key(name: str):
-    if not request_handler.delete_api_key(name):
-        typer.echo(f"Key for {name} does not exist")
-    else:
+    try:
+        key = APIKey.get(APIKey.name == name)
+        key.delete_instance()
+        db.commit()
         typer.echo(f"Deleted key for {name}")
+    except APIKey.DoesNotExist:
+        typer.echo(f"Key for {name} does not exist")
 
 
 @cli.command("list-keys")
 def list_keys():
-    for key in request_handler.list_api_keys():
+    for key in APIKey.select():
         typer.echo(f"{key.name}: {key.api_key}")
 
 
