@@ -7,7 +7,9 @@ import asyncio
 import aiohttp
 import random
 
-from openai_proxy.models import APIKey, db
+from tortoise import Tortoise
+
+from openai_proxy.models import APIKey, init_db
 
 messages = [uuid.uuid4().hex for _ in range(100)]
 
@@ -69,7 +71,20 @@ async def identity_worker(identity):
         print(f"Identity {identity} has been shut down.")
 
 
+async def initialize_api_keys():
+    await init_db()
+    for identity in range(IDENTITY_COUNT):
+        name = f"test_{identity}"
+        api_key = f"{TEST_API_KEY_PREFIX}{identity}"
+        await APIKey.get_or_create(name=name, defaults={'api_key': api_key})
+        print(f"Created API key for identity {identity}")
+    await Tortoise.close_connections()
+
+
 async def main():
+    # Initialize API keys
+    await initialize_api_keys()
+
     tasks = [asyncio.create_task(identity_worker(identity)) for identity in range(IDENTITY_COUNT)]
 
     try:
@@ -82,23 +97,12 @@ async def main():
         await asyncio.gather(*tasks, return_exceptions=True)
 
 
-def initialize_api_keys():
-    for identity in range(IDENTITY_COUNT):
-        name = f"test_{identity}"
-        api_key = f"{TEST_API_KEY_PREFIX}{identity}"
-        APIKey.get_or_create(name=name, defaults={'api_key': api_key})
-        print(f"Created API key for identity {identity}")
-    db.commit()
-
-
 if __name__ == "__main__":
     # Initialize CSV file with headers
     # if not os.path.exists(LOG_FILE):
     #     with open(LOG_FILE, mode='w', newline='') as file:
     #         writer = csv.writer(file)
     #         writer.writerow(["Timestamp", "Identity", "Duration", "StatusCode"])
-
-    initialize_api_keys()
 
     try:
         asyncio.run(main())
