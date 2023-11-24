@@ -1,3 +1,4 @@
+import json
 import random
 import asyncio
 from typing import Optional, Union, List
@@ -39,11 +40,11 @@ class CompletionRequest(BaseModel):
     prompt: Union[List[str], str]
     max_tokens: Optional[int] = None
     n: Optional[int] = None
-    stop: Optional[str] = None
+    stop: Optional[List[str]] = None
     temperature: Optional[float] = None
 
 
-def make_echo_response(prompts):
+def make_echo_response(prompts, params):
     """
     For every prompt, add a choice where the text is the prompt.
     """
@@ -54,7 +55,7 @@ def make_echo_response(prompts):
     mock_base["choices"] = []
     for i, prompt in enumerate(prompts):
         mock_base["choices"].append({
-            "text": prompt,
+            "text": prompt + "||" + json.dumps(params),
             "index": i,
             "logprobs": None,
             "finish_reason": "length"
@@ -75,18 +76,37 @@ async def simulate_latency():
         await asyncio.sleep(latency_ms / 1000.0)  # Converting milliseconds to seconds for asyncio.sleep
 
 
+counter = 0
+
+
 @app.post("/v1/completions")
 async def handle_request(completion_request: CompletionRequest):  # Note use of `async` here
-    print("Processing request.")
+    print(f"Processing request: {completion_request}")
 
     # Simulate network latency
     await simulate_latency()
+    global counter
+    counter += 1
 
     if RESPONSE_MODE == "fixed":
         print("Returning fixed response")
         return MOCK_RESPONSE
     elif RESPONSE_MODE == "echo":
         print("Returning echo response")
-        return make_echo_response(completion_request.prompt)
+        print(completion_request.dict())
+        params = {k: v for k, v in completion_request.dict().items() if k != "prompt"}
+        return make_echo_response(completion_request.prompt, params)
     else:
         raise HTTPException(status_code=500, detail="Invalid RESPONSE_MODE set in environment")
+
+
+@app.get("/v1/counter")
+async def get_counter():
+    return {"counter": counter}
+
+
+@app.get("/v1/clear")
+async def clear_counter():
+    global counter
+    counter = 0
+    return {"counter": counter}
