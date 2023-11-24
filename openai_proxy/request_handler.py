@@ -6,7 +6,8 @@ from threading import Event, Lock, Thread
 import openai
 import queue
 
-from models import APIKey, Usage, db
+from openai_proxy.models import APIKey, Usage, db
+from openai_proxy.utils import logger
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -17,11 +18,18 @@ openai.api_base = getenv("OCP_OPENAI_API_BASE")
 
 
 class RequestHandler:
+    # Wait for 3 seconds so there are no more than 20 requests per minute
+    SERVER_WAIT_TIME = 3
+
     def __init__(self, data_path="data.json", model="code-davinci-002"):
         self.lock = Lock()
         self.data_path = data_path
         self.model = model
         self.requests_queue = queue.Queue()
+
+        # Check if 'localhost' in the API base URL, if so set the wait time to 0
+        if "localhost" in openai.api_base:
+            self.SERVER_WAIT_TIME = 0
 
     def delete_api_key(self, name):
         try:
@@ -32,9 +40,9 @@ class RequestHandler:
         except APIKey.DoesNotExist:
             return False
 
-    def add_api_key(self, name):
+    def add_api_key(self, name, key):
         try:
-            APIKey.create(name=name)
+            APIKey.create(name=name, api_key=key)
             db.commit()
             return True
         except Exception:
@@ -81,6 +89,7 @@ class RequestHandler:
         value = {"prompt": params["prompt"], "event": event, "response": None}
 
         self.requests_queue.put((batch_id, shared_params, value))
+        logger.debug(f"{self.requests_queue.qsize()} requests in queue")
 
         return event, value
 
@@ -103,7 +112,7 @@ class RequestHandler:
 
     def process_request_batch(self, batch_id, shared_params, prompts, values):
         # Request OpenAI API for the batch
-        print(f"Requesting OpenAI API with batch of size {len(prompts)}")
+        logger.debug(f"Requesting OpenAI API with batch of size {len(prompts)}")
         response = self.request_openai_api(shared_params, prompts)
 
         n = shared_params.get("n", 1)
@@ -116,6 +125,7 @@ class RequestHandler:
 
     def _process_requests(self):
         while True:
+            logger.debug(f"Processing requests queue of size {self.requests_queue.qsize()}")
             # Initialize a dictionary to batch requests with the same parameters
             batched_requests = {}
             while not self.requests_queue.empty():
@@ -140,8 +150,10 @@ class RequestHandler:
                     batch_data["values"]
                 )
 
-            time.sleep(2)
+            time.sleep(self.SERVER_WAIT_TIME)
 
     def run(self):
+        logger.debug("Starting request processing thread")
         request_thread = Thread(target=self._process_requests, daemon=True)
         request_thread.start()
+        logger.debug("Request processing thread started")

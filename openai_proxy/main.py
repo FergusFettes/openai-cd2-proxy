@@ -4,14 +4,16 @@ from sys import argv
 from threading import Lock
 from uuid import uuid4
 
-from request_handler import RequestHandler
-from models import Usage
+from openai_proxy.request_handler import RequestHandler
+from openai_proxy.models import Usage
+from openai_proxy.utils import logger
 
 app = Flask(__name__)
 request_handler = RequestHandler()
 CORS(app)
 
 lock = Lock()
+logger.debug("Starting server")
 
 
 @app.route("/v1/completions", methods=["POST"])
@@ -28,8 +30,10 @@ def handle_request():
     key_info = result
     request_handler.record_usage(key_info)
 
+    logger.debug(f"Adding request: {params}")
     event, value = request_handler.add_request(params)
     response, status_code = request_handler.package_response(event, value)
+    logger.debug(f"Response: {response}")
     return jsonify(response), status_code
 
 
@@ -38,10 +42,11 @@ import typer
 cli = typer.Typer()
 
 
+# Optionally takes a string which is the key
 @cli.command("add-key")
-def add_key(name: str):
-    api_key = str(uuid4())
-    if not request_handler.add_api_key(name):
+def add_key(name: str, key: str = None):
+    api_key = key or str(uuid4())
+    if not request_handler.add_api_key(name, key):
         typer.echo(f"Key for {name} already exists")
     else:
         typer.echo(f"Added key for {name}: {api_key}")
