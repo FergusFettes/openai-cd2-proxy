@@ -1,3 +1,4 @@
+import json
 import uuid
 import os
 import csv
@@ -35,12 +36,14 @@ async def make_request(identity, session):
     }
     try:
         start_time = time.time()  # Start timing here
-        REQUEST_PAYLOAD = {"prompt": random.choice(messages)}
+        REQUEST_PAYLOAD = {"prompt": random.choice(messages), "max_tokens": random.randint(10, 15)}
         async with session.post(ENDPOINT_URL, json=REQUEST_PAYLOAD, headers=headers) as response:
             duration = time.time() - start_time  # Calculate the duration
             if response.status == 200:
                 result = await response.json()
-                if result["choices"][0]["text"] != REQUEST_PAYLOAD["prompt"]:
+                text = result["choices"][0]["text"].split("||")[0]
+                params = json.loads(result["choices"][0]["text"].split("||")[1])
+                if text != REQUEST_PAYLOAD["prompt"] or params["max_tokens"] != REQUEST_PAYLOAD["max_tokens"]:
                     print(f"Identity {identity} received invalid response: {result}")
                     response.status = 500
                 else:

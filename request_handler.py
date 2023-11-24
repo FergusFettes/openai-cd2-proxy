@@ -80,9 +80,7 @@ class RequestHandler:
         event = Event()
         value = {"prompt": params["prompt"], "event": event, "response": None}
 
-        print(self.requests_queue.qsize())
         self.requests_queue.put((batch_id, shared_params, value))
-        print(self.requests_queue.qsize())
 
         return event, value
 
@@ -105,7 +103,7 @@ class RequestHandler:
 
     def process_request_batch(self, batch_id, shared_params, prompts, values):
         # Request OpenAI API for the batch
-        print("Requesting OpenAI API")
+        print(f"Requesting OpenAI API with batch of size {len(prompts)}")
         response = self.request_openai_api(shared_params, prompts)
 
         n = shared_params.get("n", 1)
@@ -143,7 +141,7 @@ class RequestHandler:
                 )
 
             # Here you could insert a delay before processing the next set of batches
-            time.sleep(3)  # Adjust the sleep time as needed
+            time.sleep(2)  # Adjust the sleep time as needed
 
     def run(self):
         request_thread = Thread(target=self._process_requests, daemon=True)
