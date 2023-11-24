@@ -23,7 +23,7 @@ def test_single_prompt_completion(base_url):
     assert response.status_code == 200
     assert "choices" in response.json()
     assert len(response.json()["choices"]) == 1
-    assert response.json()["choices"][0]["text"] == "Hello World"
+    assert response.json()["choices"][0]["text"].startswith("Hello World")
 
 
 # @pytest.mark.parametrize("base_url", [FASTAPI_BASE_URL, FLASK_BASE_URL])

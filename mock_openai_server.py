@@ -7,6 +7,8 @@ import os
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
+from openai_proxy.utils import logger
+
 app = FastAPI()
 
 # Mock response simulating the structure of an OpenAI completion response
@@ -81,7 +83,7 @@ counter = 0
 
 @app.post("/v1/completions")
 async def handle_request(completion_request: CompletionRequest):  # Note use of `async` here
-    print(f"Processing request: {completion_request}")
+    logger.debug(f"Processing request: {completion_request}")
 
     # Simulate network latency
     await simulate_latency()
@@ -89,11 +91,10 @@ async def handle_request(completion_request: CompletionRequest):  # Note use of 
     counter += 1
 
     if RESPONSE_MODE == "fixed":
-        print("Returning fixed response")
+        logger.debug("Returning fixed response")
         return MOCK_RESPONSE
     elif RESPONSE_MODE == "echo":
-        print("Returning echo response")
-        print(completion_request.dict())
+        logger.debug("Returning echo response")
         params = {k: v for k, v in completion_request.dict().items() if k != "prompt"}
         return make_echo_response(completion_request.prompt, params)
     else:

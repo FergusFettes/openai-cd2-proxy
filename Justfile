@@ -2,10 +2,10 @@ mock:
   uvicorn mock_openai_server:app --reload
 
 run_flask:
-  flask --app main:app --debug run
+  flask --app openai_proxy/main:app --debug run
 
 run:
-  poetry run python main.py
+  poetry run python openai_proxy/main.py
 
 test:
   curl -X POST http://localhost:5000/v1/completions \

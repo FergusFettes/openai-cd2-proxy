@@ -9,7 +9,8 @@ import aiohttp
 
 import pytest
 
-from main import app
+from openai_proxy.main import app
+from openai_proxy.models import APIKey, db
 
 
 @pytest.fixture
@@ -59,29 +60,10 @@ def test_missing_prompt(client):
 
 @pytest.fixture(scope="session")
 def mock_server():
-    # Assuming your test server uses a specific data.json and lives in the same directory...
-    test_server_data_file = 'data.json'
-
-    # Define the content for your test server's data.json file
-    server_data = {
-        "api_keys": [
-            {"name": "test_0", "api_key": "test_api_key_0"},
-            {"name": "test_1", "api_key": "test_api_key_1"},
-            {"name": "test_2", "api_key": "test_api_key_2"},
-            {"name": "test_3", "api_key": "test_api_key_3"},
-            {"name": "test_4", "api_key": "test_api_key_4"},
-            {"name": "test_5", "api_key": "test_api_key_5"},
-            {"name": "test_6", "api_key": "test_api_key_6"},
-            {"name": "test_7", "api_key": "test_api_key_7"},
-            {"name": "test_8", "api_key": "test_api_key_8"},
-            {"name": "test_9", "api_key": "test_api_key_9"},
-        ],
-        "usage": []
-    }
-
-    # Write the test server's data.json file before starting the server
-    with open(test_server_data_file, 'w') as f:
-        json.dump(server_data, f)
+    # Add api keys to the db
+    for i in range(10):
+        APIKey.create(name=f'test_api_key_{i}', api_key=f'test_api_key_{i}')
+    db.commit()
 
     # Start the server as previously described
     server = subprocess.Popen(["uvicorn", "mock_openai_server:app"])
@@ -90,7 +72,9 @@ def mock_server():
     server.terminate()
     server.wait()
 
-    os.remove(test_server_data_file)
+    for i in range(10):
+        APIKey.delete().where(APIKey.name == f'test_api_key_{i}').execute()
+    db.commit()
 
 
 def test_end_to_end_valid_request(client, mock_server):
