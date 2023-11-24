@@ -29,7 +29,7 @@ class RequestHandler:
         self.requests_queue = queue.Queue()
 
         # Check if 'localhost' in the API base URL, if so set the wait time to 0
-        if "localhost" in client.base_url:
+        if "localhost" in str(client.base_url):
             self.SERVER_WAIT_TIME = 0
 
     def add_request(self, params):
@@ -58,7 +58,7 @@ class RequestHandler:
         return value["response"], 200
 
     def request_openai_api(self, shared_params, prompts):
-        return client.Completion.create(
+        return client.completions.create(
             prompt=prompts,
             **shared_params
         )
@@ -69,7 +69,7 @@ class RequestHandler:
         response = self.request_openai_api(shared_params, prompts)
 
         n = shared_params.get("n", 1)
-        choices = response["choices"]
+        choices = response.choices
         grouped_choices = [choices[i:i + n] for i in range(0, len(choices), n)]
 
         for value, group in zip(values, grouped_choices):
