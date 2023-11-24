@@ -2,17 +2,21 @@ from os import getenv
 import json
 import time
 from threading import Event, Thread
-import openai
 import queue
+
+from openai import OpenAI
 
 from openai_proxy.utils import logger
 
 from dotenv import load_dotenv
 load_dotenv()
 
-openai.api_key = getenv("OCP_OPENAI_API_KEY")
-openai.organization = getenv("OCP_OPENAI_ORG")
-openai.api_base = getenv("OCP_OPENAI_API_BASE")
+
+client = OpenAI(
+    api_key=getenv("OCP_OPENAI_API_KEY"),
+    organization=getenv("OCP_OPENAI_ORG"),
+    base_url=getenv("OCP_OPENAI_API_BASE")
+)
 
 
 class RequestHandler:
@@ -25,11 +29,11 @@ class RequestHandler:
         self.requests_queue = queue.Queue()
 
         # Check if 'localhost' in the API base URL, if so set the wait time to 0
-        if "localhost" in openai.api_base:
+        if "localhost" in client.base_url:
             self.SERVER_WAIT_TIME = 0
 
     def add_request(self, params):
-        shared_params = {k: v for k, v in params.items() if k != "prompt"}
+        shared_params = {k: v for k, v in params.items() if k != "prompt" and v is not None}
         shared_params["model"] = self.model
 
         batch_id = self._generate_batch_id(shared_params)
@@ -54,7 +58,7 @@ class RequestHandler:
         return value["response"], 200
 
     def request_openai_api(self, shared_params, prompts):
-        return openai.Completion.create(
+        return client.Completion.create(
             prompt=prompts,
             **shared_params
         )
@@ -103,6 +107,16 @@ class RequestHandler:
 
     def run(self):
         logger.debug("Starting request processing thread")
-        request_thread = Thread(target=self._process_requests, daemon=True)
-        request_thread.start()
+        self.request_thread = Thread(target=self._process_requests, daemon=True)
+        self.request_thread.start()
         logger.debug("Request processing thread started")
+
+    def stop(self):
+        logger.debug("Stopping request processing thread")
+        # Clear the queue
+        while not self.requests_queue.empty():
+            self.requests_queue.get_nowait()
+            self.requests_queue.task_done()
+        self.request_thread.join()
+        logger.debug("Request processing thread stopped")
+

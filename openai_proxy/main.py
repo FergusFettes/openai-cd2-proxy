@@ -17,7 +17,13 @@ request_handler = RequestHandler()
 async def startup():
     await init_db()
 
+
+async def shutdown():
+    request_handler.stop()
+
+
 app.add_event_handler("startup", startup)
+app.add_event_handler("shutdown", shutdown)
 
 
 class CompletionRequest(BaseModel):
@@ -42,7 +48,7 @@ async def handle_request(completion_request: CompletionRequest, authorization: s
     await Usage.create(name=key_info.name, time=time.time())
 
     logger.debug(f"Adding request: {completion_request.prompt}")
-    event, value = request_handler.add_request({"prompt": completion_request.prompt})
+    event, value = request_handler.add_request(completion_request.dict())
     response, status_code = request_handler.package_response(event, value)
     logger.debug(f"Response: {response}")
     return response
