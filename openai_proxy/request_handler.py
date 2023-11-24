@@ -27,9 +27,9 @@ class RequestHandler:
         self.model = model
         self.requests_queue = Queue()
 
-        # # Check if 'localhost' in the API base URL, if so set the wait time to 0
-        # if "localhost" in str(client.base_url):
-        #     self.SERVER_WAIT_TIME = 0
+        # Check if 'localhost' in the API base URL, if so set the wait time to 0
+        if "localhost" in str(client.base_url):
+            self.SERVER_WAIT_TIME = 0
 
     async def add_request(self, params: Dict[str, Any]) -> Any:
         shared_params = {k: v for k, v in params.items() if k != "prompt" and v is not None}
@@ -73,7 +73,7 @@ class RequestHandler:
     async def process_requests_periodically(self):
         try:
             while True:
-                # The coroutine will pause here until an item is available.
+                # The coroutine will pause here until at least one item is available.
                 batch_id, shared_params, value = await self.requests_queue.get()
                 batched_requests = {
                     batch_id: {
