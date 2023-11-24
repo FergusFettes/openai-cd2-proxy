@@ -84,6 +84,8 @@ def handle_request():
 
 def handle_pending_requests():
     while True:
+        time.sleep(0.2)
+
         with lock:
             if not pending_requests:
                 continue
@@ -112,7 +114,7 @@ def handle_pending_requests():
 
             key_to_delete = key
 
-        time.sleep(2)
+        time.sleep(1)
 
         with lock:
             del pending_requests[key_to_delete]

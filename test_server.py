@@ -58,7 +58,7 @@ def test_missing_prompt(client):
 
 
 @pytest.fixture(scope="session")
-def test_server():
+def mock_server():
     # Assuming your test server uses a specific data.json and lives in the same directory...
     test_server_data_file = 'data.json'
 
@@ -93,7 +93,7 @@ def test_server():
     os.remove(test_server_data_file)
 
 
-def test_end_to_end_valid_request(client, test_server):
+def test_end_to_end_valid_request(client, mock_server):
     """Test a valid API request end-to-end."""
     valid_api_key = 'test_api_key_0'
 
@@ -108,12 +108,12 @@ def test_end_to_end_valid_request(client, test_server):
     assert response.json['choices'][0]['text'].split('||')[0] == "test prompt"
 
 
-def test_multiple_users_different_api_keys(client, test_server):
+def test_multiple_users_different_api_keys(client, mock_server):
     """Test that multiple users with different API keys get appropriate responses."""
 
     user_responses = []  # Collect responses for verification
 
-    for i in range(3):  # We added three API keys in the test_server fixture
+    for i in range(3):  # We added three API keys in the mock_server fixture
         api_key = f'test_api_key_{i}'
         user_prompt = f'prompt for user {i}'
 
@@ -135,7 +135,7 @@ def test_multiple_users_different_api_keys(client, test_server):
         assert user_response['response_text'] == f"prompt for user {user_responses.index(user_response)}"
 
 
-def test_multiple_users_different_api_keys_different_params(client, test_server):
+def test_multiple_users_different_api_keys_different_params(client, mock_server):
     """
     Test that multiple users with different API keys get appropriate responses.
     Since this test is ran synchronously, we dont get to see batching in action--
@@ -147,7 +147,7 @@ def test_multiple_users_different_api_keys_different_params(client, test_server)
     user_responses = []  # Collect responses for verification
     user_params = []
 
-    for i in range(10):  # We added three API keys in the test_server fixture
+    for i in range(10):  # We added three API keys in the mock_server fixture
         api_key = f'test_api_key_{i}'
         user_prompt = f'prompt for user {i}'
         # If i is even, use the default params
@@ -188,68 +188,85 @@ def test_multiple_users_different_api_keys_different_params(client, test_server)
         assert user_response['response_params'] == user_params[user_responses.index(user_response)]
 
     # Count the number of times the server was called
-    # Just make a request to the mock server at localhost:8000/counter to get the count
+    # Just make a request to the mock_server server at localhost:8000/counter to get the count
     response = requests.get('http://localhost:8000/v1/counter')
     assert response.status_code == 200
     assert response.json()['counter'] == 10
 
 
-# async def post_prompt_async(session, api_key, user_prompt, params):
-#     url = 'http://localhost:5000/v1/completions'  # Swap with your actual Flask app URL
-#     headers = {"Authorization": f"Bearer {api_key}"}
-#
-#     async with session.post(url, headers=headers, json=params) as response:
-#         response_json = await response.json()
-#         return response_json, response.status
-#
-#
-# async def test_multiple_users_diff_api_keys_concurrent():
-#     tasks = []
-#     user_params = []
-#
-#     # Prepare parameters for all users
-#     for i in range(10):
-#         user_prompt = f'prompt for user {i}'
-#         if i % 2 == 0:
-#             params = {
-#                 "prompt": user_prompt,
-#                 "max_tokens": 10,
-#                 "n": 1,
-#                 "temperature": 0.7,
-#                 "stop": ["wut"]
-#             }
-#         else:
-#             params = {
-#                 "prompt": user_prompt,
-#                 "max_tokens": i,
-#                 "n": 1,
-#                 "temperature": float(i) / 10,
-#                 "stop": ["\n"]
-#             }
-#         user_params.append(params)
-#
-#     # Start an aiohttp session
-#     async with aiohttp.ClientSession() as session:
-#         # Create tasks for concurrent execution
-#         for i in range(10):
-#             task = post_prompt_async(
-#                 session,
-#                 f'test_api_key_{i}',
-#                 user_params[i]['prompt'],
-#                 user_params[i]
-#             )
-#             tasks.append(task)
-#
-#         # Run all the requests concurrently
-#         responses = await asyncio.gather(*tasks)
-#
-#     # Process the responses
-#     for idx, (response_json, status_code) in enumerate(responses):
-#         assert status_code == 200
-#         assert response_json['choices'][0]['text'].split('||')[0] == f"prompt for user {idx}"
-#         # You can continue with the rest of your assertions here
-#
-#
-# @pytest.mark.asyncio
-# async def test_concurrent_requests(client, test_server):
-#     await test_multiple_users_diff_api_keys_concurrent()
+@pytest.fixture(scope="session")
+def flask_server(mock_server):
+    # Define the env vars
+    env = os.environ.copy()
+    env['OCP_OPENAI_API_KEY'] = 'test_api_key_0'
+    env['OCP_OPENAI_ORG'] = 'test_org'
+    env['OCP_OPENAI_API_BASE'] = 'http://localhost:8000/v1'
+    # Configure to use test environment variables if necessary
+    # Start the Flask app in the background
+    server = subprocess.Popen(["flask", "--app", "main:app", "run", "--port=5000"], env=env)
+    time.sleep(5)
+    yield server
+    server.terminate()
+    server.wait()
+
+
+@pytest.mark.asyncio
+async def test_concurrent_requests(flask_server):
+    response = requests.get('http://localhost:8000/v1/clear')
+    assert response.status_code == 200
+
+    user_params = []
+
+    # Prepare parameters for all users
+    for i in range(4):
+        user_prompt = f'prompt for user {i}'
+        if i % 2 == 0:
+            params = {
+                "prompt": user_prompt,
+                "max_tokens": 10,
+                "n": 1,
+                "temperature": 0.7,
+                "stop": ["wut"]
+            }
+        else:
+            params = {
+                "prompt": user_prompt,
+                "max_tokens": i,
+                "n": 1,
+                "temperature": float(i) / 10,
+                "stop": ["\n"]
+            }
+        user_params.append(params)
+
+    # Perform asynchronous requests using aiohttp
+    async with aiohttp.ClientSession() as session:
+        # Generate a list of coroutine function calls for concurrent requests
+        tasks = [
+            asyncio.create_task(  # Create a task for each coroutine
+                session.post(
+                    'http://localhost:5000/v1/completions',
+                    json={**user_params[i]},
+                    headers={'Authorization': f'Bearer test_api_key_{i}'}
+                )
+            )
+            for i in range(4)
+        ]
+
+        responses = await asyncio.gather(*tasks)  # Waits for all tasks to complete
+
+        # Verify the results
+        for response in responses:
+            assert response.status == 200
+            data = await response.json()
+            response_text = data['choices'][0]['text'].split('||')[0]
+            assert response_text.startswith('prompt for user')
+
+    # Clean up tasks
+    for task in tasks:
+        task.cancel()
+
+    # Count the number of times the server was called
+    # Just make a request to the mock_server server at localhost:8000/counter to get the count
+    response = requests.get('http://localhost:8000/v1/counter')
+    assert response.status_code == 200
+    assert response.json()['counter'] < 4
