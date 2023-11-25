@@ -44,28 +44,6 @@ async def get_total_usage(name: str):
     return total[0].get('total')
 
 
-# Function to calculate usage per given timeframe for a given name
-async def get_usage_per_timeframe(name: str, timeframe: str):
-    now = datetime.utcnow()
-    if timeframe == 'day':
-        start_time = now - timedelta(days=1)
-    elif timeframe == 'week':
-        start_time = now - timedelta(weeks=1)
-    elif timeframe == 'hour':
-        start_time = now - timedelta(hours=1)
-    elif timeframe == 'minute':
-        start_time = now - timedelta(minutes=1)
-    else:
-        raise ValueError('Invalid timeframe provided.')
-
-    total = await (
-        Usage
-        .filter(name=name, time__gte=start_time.timestamp())
-        .annotate(total=functions.Sum('tokens')).values('total')
-    )
-    return total[0].get('total')
-
-
 @cli.command()
 @with_db
 async def add_key(name: str, key: str = None):
