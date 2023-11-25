@@ -48,10 +48,6 @@ class RequestHandler:
     def _generate_batch_id(self, shared_params: Dict[str, Any]) -> str:
         return json.dumps(tuple(sorted(shared_params.items())), sort_keys=True)
 
-    async def package_response(self, event: Event, value: Any) -> Any:
-        await event.wait()
-        return value["response"], 200
-
     async def request_openai_api(self, shared_params: Dict[str, Any], prompts: Any) -> Any:
         return await client.completions.create(
             prompt=prompts,

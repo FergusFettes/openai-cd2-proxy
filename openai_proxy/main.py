@@ -2,29 +2,31 @@ import asyncio
 from typing import Optional, Union, List
 import time
 from sys import argv
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Header
 from pydantic import BaseModel
+from fastapi_utils.timing import add_timing_middleware
 
 from openai_proxy.models import APIKey, Usage, init_db, cli
 from openai_proxy.request_handler import RequestHandler
 from openai_proxy.utils import logger
 
 
-app = FastAPI()
-request_handler = RequestHandler()
-
-
-@app.on_event("startup")
-async def startup():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     await init_db()
     request_handler.process_task = asyncio.create_task(request_handler.process_requests_periodically())
 
+    yield
 
-@app.on_event("shutdown")
-async def shutdown():
     request_handler.process_task.cancel()
     await request_handler.process_task
+
+
+app = FastAPI(lifespan=lifespan)
+add_timing_middleware(app, record=logger.info, prefix="app", exclude="untimed")
+request_handler = RequestHandler()
 
 
 class CompletionRequest(BaseModel):
@@ -55,7 +57,10 @@ async def completion(completion_request: CompletionRequest, authorization: str =
 
     logger.debug(f"Adding request: {completion_request.prompt}")
     event, value = await request_handler.add_request(completion_request.dict())
-    response, status_code = await request_handler.package_response(event, value)
+
+    # Wait for the response to be ready
+    await event.wait()
+    response = value["response"]
 
     await Usage.create(
         name=key_info.name,
@@ -66,6 +71,13 @@ async def completion(completion_request: CompletionRequest, authorization: str =
 
     logger.debug(f"Response: {response}")
     return response
+
+
+def get_response_length(response):
+    total = 0
+    for choice in response['choices']:
+        total += len(choice.text)
+    return total
 
 
 @app.get("/v1/usage")
@@ -123,13 +135,6 @@ async def leaderboard_toggle(authorization: str = Header(None)):
     await key_info.save()
 
     return f"You are now {'not ' if not key_info.leaderboard else ''}on the leaderboard."
-
-
-def get_response_length(response):
-    total = 0
-    for choice in response['choices']:
-        total += len(choice.text)
-    return total
 
 
 if __name__ == "__main__":
