@@ -8,7 +8,7 @@ from fastapi import FastAPI, HTTPException, Header
 from pydantic import BaseModel
 from fastapi_utils.timing import add_timing_middleware
 
-from openai_proxy.models import APIKey, Usage, init_db, cli
+from openai_proxy.__init__ import APIKey, Usage, init_db, cli
 from openai_proxy.request_handler import RequestHandler
 from openai_proxy.utils import logger
 import tiktoken

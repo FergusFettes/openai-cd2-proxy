@@ -10,7 +10,7 @@ run:
 test:
   curl -X POST http://localhost:5000/v1/completions \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer test_api_key2" \
+  -H "Authorization: Bearer test_api_key" \
   -d '{"prompt": "Hello World", "max_tokens": 60}'
 
 usage:
