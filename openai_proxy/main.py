@@ -8,7 +8,7 @@ from fastapi import FastAPI, HTTPException, Header
 from pydantic import BaseModel
 from fastapi_utils.timing import add_timing_middleware
 
-from openai_proxy.__init__ import APIKey, Usage, init_db, cli
+from openai_proxy import APIKey, Usage, init_db, cli
 from openai_proxy.request_handler import RequestHandler
 from openai_proxy.utils import logger
 import tiktoken
@@ -16,17 +16,20 @@ import tiktoken
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    logger.info("Starting lifespan")
     await init_db()
     request_handler.process_task = asyncio.create_task(request_handler.process_requests_periodically())
 
+    logger.info("Starting app")
     yield
 
+    logger.info("Stopping app")
     request_handler.process_task.cancel()
     await request_handler.process_task
 
 
 app = FastAPI(lifespan=lifespan)
-add_timing_middleware(app, record=logger.info, prefix="app", exclude="untimed")
+add_timing_middleware(app, record=logger.debug, prefix="app", exclude="untimed")
 request_handler = RequestHandler()
 enc = tiktoken.encoding_for_model("code-davinci-002")
 

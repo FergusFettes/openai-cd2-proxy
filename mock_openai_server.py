@@ -57,7 +57,7 @@ def make_echo_response(prompts, params):
     mock_base["choices"] = []
     for i, prompt in enumerate(prompts):
         mock_base["choices"].append({
-            "text": prompt + "||" + json.dumps(params),
+            "text": prompt + "||" + json.dumps(params) + "||" + "a" * random.randint(1000, 10000),
             "index": i,
             "logprobs": None,
             "finish_reason": "length"

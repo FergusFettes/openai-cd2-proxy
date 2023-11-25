@@ -9,15 +9,16 @@ import random
 
 from tortoise import Tortoise
 
-from openai_proxy.models import APIKey, init_db
+from openai_proxy import APIKey, init_db
 
 messages = [uuid.uuid4().hex for _ in range(100)]
 
 # Configuration parameters
 ENDPOINT_URL = "http://localhost:5000/v1/completions"  # Replace with your actual endpoint
-REQUEST_INTERVAL_SEC = 3
+REQUEST_INTERVAL_SEC = 10
 TEST_API_KEY_PREFIX = "test_api_key_"  # Prefix for the API keys
 IDENTITY_COUNT = 30
+NUMBER_OF_PARAM_SETS = 10
 
 # Shutdown event signal
 shutdown_event = asyncio.Event()
@@ -38,7 +39,10 @@ async def make_request(identity, session):
     }
     try:
         start_time = time.time()  # Start timing here
-        REQUEST_PAYLOAD = {"prompt": random.choice(messages), "max_tokens": random.randint(10, 15)}
+        REQUEST_PAYLOAD = {
+            "prompt": random.choice(messages),
+            "max_tokens": random.randint(10, 10 + NUMBER_OF_PARAM_SETS)
+        }
         async with session.post(ENDPOINT_URL, json=REQUEST_PAYLOAD, headers=headers) as response:
             duration = time.time() - start_time  # Calculate the duration
             if response.status == 200:
@@ -46,10 +50,10 @@ async def make_request(identity, session):
                 text = result["choices"][0]["text"].split("||")[0]
                 params = json.loads(result["choices"][0]["text"].split("||")[1])
                 if text != REQUEST_PAYLOAD["prompt"] or params["max_tokens"] != REQUEST_PAYLOAD["max_tokens"]:
-                    print(f"Identity {identity} received invalid response: {result}")
+                    print(f"Identity {identity} received invalid response: {text}{params}")
                     response.status = 500
                 else:
-                    print(f"{duration:.2f}s - Identity {identity} received valid response: {result}")
+                    print(f"{duration:.2f}s - Identity {identity} received valid response: {text}{params}")
             else:
                 print(f"{duration:.2f}s - Identity {identity} received error response: {response.status}")
             # timestamp = time.strftime("%Y-%m-%d %H:%M:%S")

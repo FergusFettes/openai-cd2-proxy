@@ -3,6 +3,7 @@ import json
 import asyncio
 from asyncio import Queue, Event
 from typing import Any, Dict
+from collections import OrderedDict
 
 from openai import AsyncClient
 
@@ -27,9 +28,9 @@ class RequestHandler:
         self.model = model
         self.requests_queue = Queue()
 
-        # Check if 'localhost' in the API base URL, if so set the wait time to 0
-        if "localhost" in str(client.base_url):
-            self.SERVER_WAIT_TIME = 0
+        # # Check if 'localhost' in the API base URL, if so set the wait time to 0
+        # if "localhost" in str(client.base_url):
+        #     self.SERVER_WAIT_TIME = 0
 
     async def add_request(self, params: Dict[str, Any]) -> Any:
         shared_params = {k: v for k, v in params.items() if k != "prompt" and v is not None}
@@ -68,41 +69,53 @@ class RequestHandler:
 
     async def process_requests_periodically(self):
         try:
+            batched_requests = OrderedDict()
             while True:
                 # The coroutine will pause here until at least one item is available.
                 batch_id, shared_params, value = await self.requests_queue.get()
-                batched_requests = {
-                    batch_id: {
-                        "shared_params": shared_params,
-                        "prompts": [value["prompt"]],
-                        "values": [value]
-                    }
-                }
+                self.add_to_batch(batched_requests, batch_id, shared_params, value["prompt"], value)
+                logger.info(f"Batches waiting: {len(batched_requests)}")
+                self.requests_queue.task_done()
 
+                logger.info(f"Requests waiting: {self.requests_queue.qsize()}")
                 while not self.requests_queue.empty():
                     batch_id, shared_params, value = await self.requests_queue.get()
-                    if batch_id in batched_requests:
-                        batched_requests[batch_id]["prompts"].append(value["prompt"])
-                        batched_requests[batch_id]["values"].append(value)
-                    else:
-                        batched_requests[batch_id] = {
-                            "shared_params": shared_params,
-                            "prompts": [value["prompt"]],
-                            "values": [value]
-                        }
+                    self.add_to_batch(batched_requests, batch_id, shared_params, value["prompt"], value)
                     self.requests_queue.task_done()
 
-                # Process each batch
-                for batch_id, batch_data in batched_requests.items():
-                    await self.process_request_batch(
-                        batch_id,
-                        batch_data["shared_params"],
-                        batch_data["prompts"],
-                        batch_data["values"]
-                    )
+                # Find number of prompts in each batch
+                batch_sizes = [len(batch_data["prompts"]) for batch_data in batched_requests.values()]
+                logger.info(f"Batch sizes: {batch_sizes}")
+
+                # Process one batch and rotate to the next one
+                batch_id, batch_data = batched_requests.popitem(last=False)
+                await self.process_request_batch(
+                    batch_id,
+                    batch_data["shared_params"],
+                    batch_data["prompts"],
+                    batch_data["values"]
+                )
 
                 # Delay before the next iteration of the loop.
                 await asyncio.sleep(self.SERVER_WAIT_TIME)
 
         except asyncio.CancelledError:
             logger.debug("Request processing has been cancelled")
+
+    def add_to_batch(
+            self,
+            batched_requests: dict,
+            batch_id: str,
+            shared_params: Dict[str, Any],
+            prompts: Any,
+            values: Any
+    ):
+        if batch_id in batched_requests:
+            batched_requests[batch_id]["prompts"].append(prompts)
+            batched_requests[batch_id]["values"].append(values)
+        else:
+            batched_requests[batch_id] = {
+                "shared_params": shared_params,
+                "prompts": [prompts],
+                "values": [values]
+            }
