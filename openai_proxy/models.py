@@ -20,9 +20,9 @@ class Usage(Model):
     type = fields.CharField(max_length=255, index=True)
 
 
-async def init_db():
+async def init_db(db_url='sqlite://data.sqlite'):
     await Tortoise.init(
-        db_url='sqlite://data.sqlite',
+        db_url=db_url,
         modules={'models': ['__main__']}
     )
     await Tortoise.generate_schemas()
