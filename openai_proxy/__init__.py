@@ -1,4 +1,3 @@
-from datetime import datetime, timedelta
 import uuid
 import asyncio
 import functools
@@ -7,7 +6,7 @@ from tortoise import Tortoise
 from tortoise import functions
 import typer
 
-from openai_proxy.models import APIKey, Usage
+from openai_proxy.models import APIKey, Usage, Performance
 
 
 cli = typer.Typer()
@@ -42,6 +41,23 @@ async def db_task(func, db_url, *args, **kwargs):
 async def get_total_usage(name: str):
     total = await Usage.filter(name=name).annotate(total=functions.Sum('tokens')).values('total')
     return total[0].get('total')
+
+
+async def get_success_rate():
+    success = await (
+        Performance
+        .filter(success=True)
+        .annotate(total=functions.Count('id'))
+        .values('total')
+    )[0].get('total')
+    failure = await (
+        Performance
+        .filter(success=False)
+        .annotate(total=functions.Count('id'))
+        .values('total')
+    )[0]['total']
+    total = success + failure
+    return success / (total), total
 
 
 @cli.command()
@@ -101,6 +117,13 @@ async def usage():
 async def total_usage(name: str):
     total = await get_total_usage(name)
     typer.echo(f"Total tokens used by {name}: {total}")
+
+
+@cli.command()
+@with_db
+async def success():
+    rate, total = await get_success_rate()
+    typer.echo(f"Success rate: {rate} over {total} requests")
 
 
 if __name__ == "__main__":

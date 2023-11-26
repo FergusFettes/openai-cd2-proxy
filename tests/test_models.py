@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 import pytest
 from tortoise import Tortoise
 
-from openai_proxy import get_total_usage, get_usage_per_timeframe, Usage, APIKey, init_db, with_db
+from openai_proxy import get_total_usage, Usage, APIKey, init_db, with_db
 
 
 @pytest.mark.asyncio

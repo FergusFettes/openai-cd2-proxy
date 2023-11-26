@@ -15,3 +15,10 @@ class Usage(Model):
     time = fields.FloatField()
     tokens = fields.IntField()
     type = fields.CharField(max_length=255, index=True)
+
+
+class Performance(Model):
+    id = fields.IntField(pk=True)
+    time = fields.FloatField()
+    duration = fields.FloatField()
+    success = fields.BooleanField()
