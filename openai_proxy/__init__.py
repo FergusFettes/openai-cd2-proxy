@@ -49,19 +49,21 @@ async def get_success_rate():
         .filter(success=True)
         .annotate(total=functions.Count('id'))
         .values('total')
-    )[0].get('total')
+    )
+    success = success[0]["total"]
     failure = await (
         Performance
         .filter(success=False)
         .annotate(total=functions.Count('id'))
         .values('total')
-    )[0]['total']
+    )
+    failure = failure[0]["total"]
     total = success + failure
     return success / (total), total
 
 
 @cli.command()
-@with_db
+@with_db()
 async def add_key(name: str, key: str = None):
     api_key = key or str(uuid.uuid4())
     try:
@@ -72,7 +74,7 @@ async def add_key(name: str, key: str = None):
 
 
 @cli.command()
-@with_db
+@with_db()
 async def update_key(name: str):
     api_key = str(uuid.uuid4())
     key_info = await APIKey.filter(name=name).first()
@@ -85,7 +87,7 @@ async def update_key(name: str):
 
 
 @cli.command()
-@with_db
+@with_db()
 async def delete_key(name: str):
     key_info = await APIKey.filter(name=name).first()
     if key_info:
@@ -96,7 +98,7 @@ async def delete_key(name: str):
 
 
 @cli.command()
-@with_db
+@with_db()
 async def list_keys():
     keys = await APIKey.all()
     for key in keys:
@@ -104,7 +106,7 @@ async def list_keys():
 
 
 @cli.command()
-@with_db
+@with_db()
 async def usage():
     usages = await Usage.all()
     for usage in usages:
@@ -113,14 +115,14 @@ async def usage():
 
 # CLI command to get total usage
 @cli.command()
-@with_db
+@with_db()
 async def total_usage(name: str):
     total = await get_total_usage(name)
     typer.echo(f"Total tokens used by {name}: {total}")
 
 
 @cli.command()
-@with_db
+@with_db()
 async def success():
     rate, total = await get_success_rate()
     typer.echo(f"Success rate: {rate} over {total} requests")
