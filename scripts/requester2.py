@@ -24,6 +24,7 @@ async def log_to_csv(logfile, identity, timestamp, duration, status_code):
         # If the file didn't exist before this process, write the header
         if not file_exists:
             writer.writerow(['timestamp', 'identity', 'duration', 'status_code'])
+            print(f"Created new logfile: {logfile}")
         writer.writerow([timestamp, identity, duration, status_code])
 
 
@@ -169,7 +170,7 @@ class Benchmark:
         # Rest of the function remains the same
         # Create logfiles for each combination, run benchmark, read results, and prepare for heatmap...
         print(f"Running benchmark with {len(combinations)} combinations of {requests_per_minute} requests per minute")
-        all_results = []
+        # all_results = []
 
         # Create logfiles for each combination
         logfiles = [
@@ -188,8 +189,8 @@ class Benchmark:
             print(f"Running benchmark with {identities} identities and {pause:.2f} second pause...")
             start_time = time.time()
 
-            # seconds = total_duration_minutes * 60
-            seconds = 3
+            seconds = total_duration_minutes * 60
+            # seconds = 3
             requester_tasks = self.create_tasks()
             shutdown_task = asyncio.create_task(self.shutdown_task(seconds))
             tasks = [*requester_tasks, shutdown_task]
@@ -200,9 +201,9 @@ class Benchmark:
             seconds_elapsed = end_time - start_time
             print(f"Finished benchmark run, elapsed time: {seconds_elapsed:.2f}s")
 
-            # Read results and append to all_results
-            data = pd.read_csv(logfile)
-            all_results.append((identities, pause, data))
+            # # Read results and append to all_results
+            # data = pd.read_csv(logfile)
+            # all_results.append((identities, pause, data))
 
         return logfiles
 
@@ -269,7 +270,7 @@ class Benchmark:
 
             # Calculate success rate
             total_requests = len(data)
-            successful_requests = data[data['status_code'] == 200].shape[0]
+            successful_requests = data[data['status_code'] == '200'].shape[0]
             success_rate = successful_requests / total_requests if total_requests > 0 else 0
 
             # Append identities, pause, and success rate to the results list
@@ -363,11 +364,13 @@ def run_load_test(
     Runs an automated load-testing experiment and generates a heatmap based on the results.
     """
     benchmark = Benchmark(0, 0, parameters, endpoint_url, logfile, test_api_key_prefix)
-    logfiles = asyncio.run(
-        benchmark.run_benchmark_with_load(requests_per_minute, total_duration_minutes=total_duration_minutes)
-    )
+    # logfiles = asyncio.run(
+    #     benchmark.run_benchmark_with_load(requests_per_minute, total_duration_minutes=total_duration_minutes)
+    # )
     #
     try:
+        # # Logfiles is actually all the csv files in the current dir
+        logfiles = [logfile for logfile in os.listdir() if logfile.endswith(".csv")]
         experiment_results = benchmark.process_experiment_data(logfiles)
         benchmark.generate_heatmap(experiment_results)
     except FileNotFoundError:

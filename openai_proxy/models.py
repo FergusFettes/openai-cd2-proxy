@@ -15,6 +15,7 @@ class Usage(Model):
     time = fields.FloatField()
     tokens = fields.IntField()
     type = fields.CharField(max_length=255, index=True)
+    user_agent = fields.CharField(max_length=255, null=True)
 
 
 class Performance(Model):
