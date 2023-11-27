@@ -106,7 +106,7 @@ cli = typer.Typer()
 
 
 @cli.command()
-def cli_main(log: bool = True, identities: int = 300, request_pause: int = 3, parameters: int = 1):
+def cli_main(log: bool = True, identities: int = 50, request_pause: int = 3, parameters: int = 1):
     # Initialize CSV file with headers
     if log:
         logfile = f"{identities}_ids_{request_pause}_pause_{parameters}_params.csv"
