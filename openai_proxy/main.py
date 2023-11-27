@@ -11,7 +11,7 @@ from fastapi_utils.timing import add_timing_middleware
 from openai_proxy import APIKey, Usage, Performance, init_db, cli
 from openai_proxy.request_handler import RequestHandler
 from openai_proxy.utils import logger
-# import tiktoken
+import tiktoken
 
 
 @asynccontextmanager
@@ -31,7 +31,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 add_timing_middleware(app, record=logger.info, prefix="app", exclude="untimed")
 request_handler = RequestHandler()
-# enc = tiktoken.encoding_for_model("code-davinci-002")
+enc = tiktoken.encoding_for_model("code-davinci-002")
 
 
 class CompletionRequest(BaseModel):
@@ -54,8 +54,7 @@ async def completion(completion_request: CompletionRequest, authorization: str =
     if not key_info:
         raise HTTPException(status_code=401, detail="Invalid API key")
 
-    # input_tokens = len(enc.encode(completion_request.prompt))
-    input_tokens = len(completion_request.prompt)
+    input_tokens = len(enc.encode(completion_request.prompt))
     await Usage.create(
         name=key_info.name,
         time=time.time(),
@@ -91,8 +90,7 @@ async def completion(completion_request: CompletionRequest, authorization: str =
 def get_response_length(response):
     total = 0
     for choice in response['choices']:
-        # total += len(enc.encode(choice.text))
-        total += len(choice.text)
+        total += len(enc.encode(choice.text))
     return total
 
 
