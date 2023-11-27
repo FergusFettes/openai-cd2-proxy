@@ -43,7 +43,11 @@ class CompletionRequest(BaseModel):
 
 
 @app.post("/v1/completions")
-async def completion(completion_request: CompletionRequest, authorization: str = Header(None)):
+async def completion(
+        completion_request: CompletionRequest,
+        authorization: str = Header(None),
+        user_agent: Optional[str] = Header(None)
+):
     start = time.time()             # TODO: see if i can get durations from the timing middleware?
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Invalid API key")
@@ -60,6 +64,7 @@ async def completion(completion_request: CompletionRequest, authorization: str =
         time=time.time(),
         tokens=input_tokens,
         type="prompt",
+        user_agent=user_agent
     )
 
     logger.debug(f"Adding request: {completion_request.prompt}")
@@ -76,6 +81,7 @@ async def completion(completion_request: CompletionRequest, authorization: str =
         time=time.time(),
         tokens=get_response_length(response),
         type="completion",
+        user_agent=user_agent
     )
 
     await Performance.create(
