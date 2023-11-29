@@ -28,4 +28,4 @@ for logger_name, logger_obj in logging.Logger.manager.loggerDict.items():
     # can also be present in the loggerDict.
     if isinstance(logger_obj, logging.Logger):
         logger_obj.setLevel(logging_level)
-        logger_obj.propagate = False  # If you want to prevent handlers from upper level loggers to handle these logs
+        # logger_obj.propagate = False  # If you want to prevent handlers from upper level loggers to handle these logs
