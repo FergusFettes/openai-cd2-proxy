@@ -58,7 +58,11 @@ async def completion(
     if not key_info:
         raise HTTPException(status_code=401, detail="Invalid API key")
 
-    input_tokens = len(enc.encode(completion_request.prompt))
+    prompt = completion_request.prompt
+    if isinstance(prompt, list):
+        input_tokens = sum([len(enc.encode(p)) for p in prompt])
+    else:
+        input_tokens = len(enc.encode(prompt))
     await Usage.create(
         name=key_info.name,
         time=time.time(),
