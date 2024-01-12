@@ -1,3 +1,6 @@
+all:
+  poetry install
+
 mock:
   poetry run uvicorn mock_openai_server:app --reload
 
@@ -7,6 +10,9 @@ mock:
 run:
   poetry run python openai_proxy/main.py
 
+add:
+  poetry run main add-key --key test_api_key test
+
 test:
   curl -X POST http://localhost:5000/v1/completions \
   -H "Content-Type: application/json" \
@@ -15,12 +21,10 @@ test:
 
 usage:
   curl -X GET http://localhost:5000/v1/usage \
-  -H "Content-Type: application/json" \
   -H "Authorization: Bearer test_api_key"
 
 leaderboard:
   curl -X GET http://localhost:5000/v1/leaderboard \
-  -H "Content-Type: application/json" \
   -H "Authorization: Bearer test_api_key"
 
 leaderboard_toggle:
